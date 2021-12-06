@@ -82,6 +82,17 @@ class Processor:
             logging.info(
                 f"Loaded NetCDF data into array with dimensions: {self.xr.dims}."
             )
+            # Compatibility with old file format
+            compatibility = {}
+            data_variables = list(self.xr.keys())
+            if "mean" in data_variables:
+                compatibility["mean"] = "sic_mean"
+            if "stddev" in data_variables:
+                compatibility["stddev"] = "sic_stddev"
+            if compatibility:
+                self.xr = self.xr.rename(compatibility)
+            logging.info(f"Identified data variables: {list(self.xr.keys())}.")
+            # Identify hemisphere
             keywords = self.xr.attrs.get("keywords", "").lower()
             lat_max = self.xr.attrs.get("geospatial_lat_max", 0)
             lat_min = self.xr.attrs.get("geospatial_lat_min", 0)
@@ -203,7 +214,7 @@ class Processor:
         # Construct a list of values
         logging.info("Loading forecasts from input data...")
         df_forecasts = (
-            self.xr.where(self.xr["mean"] > 0).to_dataframe().dropna().reset_index()
+            self.xr.where(self.xr["sic_mean"] > 0).to_dataframe().dropna().reset_index()
         )
         df_forecasts["xc_m"] = pd.to_numeric(
             1000 * df_forecasts["xc"], downcast="integer"
@@ -258,8 +269,8 @@ class Processor:
                         record.time.date(),
                         record.time.date() + datetime.timedelta(record.leadtime),
                         record.cell_id,
-                        record.mean,
-                        record.stddev,
+                        record.sic_mean,
+                        record.sic_stddev,
                     ],
                 )
             self.cnxn.commit()
