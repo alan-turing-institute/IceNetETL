@@ -94,6 +94,13 @@ resource "null_resource" "functions" {
   }
 
   provisioner "local-exec" {
-    command = "cd ../azfunctions; echo \"Deploying functions from $(pwd)\"; sleep 30; func azure functionapp publish ${local.app_name} --python; cd -"
+    command = <<EOF
+    echo "Waiting for other deployments to finish..."
+    sleep 150
+    cd ../azfunctions
+    echo "Deploying functions from $(pwd)"
+    func azure functionapp publish ${local.app_name} --python
+    cd -
+    EOF
   }
 }
