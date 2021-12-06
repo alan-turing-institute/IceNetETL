@@ -2,6 +2,10 @@
 import pandas as pd
 
 
+class InputBlobTriggerException(Exception):
+    pass
+
+
 def batches(input, size):
     """Yield successive chunks of up to 'size' elements from input."""
     if isinstance(input, pd.DataFrame):

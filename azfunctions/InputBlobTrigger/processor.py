@@ -14,7 +14,7 @@ from shapely.geometry import Polygon
 import xarray
 
 # Local
-from .utils import batches, human_readable, mean_step_size
+from .utils import batches, human_readable, mean_step_size, InputBlobTriggerException
 
 
 class Processor:
@@ -62,9 +62,9 @@ class Processor:
                     host=db_host,
                 )
                 logging.info(f"Connected to database {db_name} on {db_host}.")
-            except psycopg2.OperationalError:
+            except psycopg2.OperationalError as exc:
                 logging.error(f"Failed to connect to database {db_name} on {db_host}!")
-                raise
+                raise InputBlobTriggerException(exc)
         return self.cnxn_
 
     @property
@@ -96,7 +96,7 @@ class Processor:
             )
         except ValueError as exc:
             logging.error(f"Could not load NetCDF data from {inputBlob.name}!")
-            logging.error(exc)
+            raise InputBlobTriggerException(exc)
 
     def update_geometries(self) -> None:
         """Update the table of geometries, creating it if necessary."""
