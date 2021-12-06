@@ -14,10 +14,21 @@ resource "azurerm_application_insights" "this" {
   tags                = local.tags
 }
 
+# Create the storage account
+resource "azurerm_storage_account" "this" {
+  name                     = "st${module.common.project_name}processing"
+  resource_group_name      = azurerm_resource_group.this.name
+  location                 = azurerm_resource_group.this.location
+  account_tier             = "Standard"
+  account_kind             = "StorageV2"
+  account_replication_type = "LRS"
+  tags                     = local.tags
+}
+
 # Storage container for deploying functions
 resource "azurerm_storage_container" "this" {
   name                  = "deployments"
-  storage_account_name  = var.storage_account.name
+  storage_account_name  = azurerm_storage_account.this.name
   container_access_type = "private"
 }
 
@@ -48,8 +59,8 @@ resource "azurerm_function_app" "this" {
   location                   = module.common.location
   resource_group_name        = azurerm_resource_group.this.name
   app_service_plan_id        = azurerm_app_service_plan.this.id
-  storage_account_name       = var.storage_account.name
-  storage_account_access_key = var.storage_account.primary_access_key
+  storage_account_name       = var.data_storage_account.name
+  storage_account_access_key = var.data_storage_account.primary_access_key
   os_type                    = "linux"
   version                    = "~3"
   site_config {
@@ -57,13 +68,15 @@ resource "azurerm_function_app" "this" {
     use_32_bit_worker_process = false
   }
   app_settings = {
-    "FUNCTIONS_WORKER_RUNTIME"              = "python"
     "APPINSIGHTS_INSTRUMENTATIONKEY"        = "${azurerm_application_insights.this.instrumentation_key}"
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = "InstrumentationKey=${azurerm_application_insights.this.instrumentation_key}"
-    "PSQL_HOST"                             = var.database_fqdn
+    "ENABLE_ORYX_BUILD"                     = "true"
+    "FUNCTIONS_WORKER_RUNTIME"              = "python"
     "PSQL_DB"                               = var.database_name
-    "PSQL_USER"                             = var.database_user
+    "PSQL_HOST"                             = var.database_fqdn
     "PSQL_PWD"                              = var.database_password
+    "PSQL_USER"                             = var.database_user
+    "SCM_DO_BUILD_DURING_DEPLOYMENT"        = "1"
   }
   tags = local.tags
 }

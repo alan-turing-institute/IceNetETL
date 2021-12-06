@@ -2,6 +2,9 @@
 module "common" {
   source = "../common"
 }
+variable "data_storage_account" {
+  description = "Storage account containing input data"
+}
 variable "database_fqdn" {
   description = "Database server FQDN"
   type        = string
@@ -25,9 +28,6 @@ variable "database_password" {
 variable "database_resource_group_name" {
   type        = string
   description = "Resource group of the storage account"
-}
-variable "storage_account" {
-  description = "Storage account"
 }
 # Local variables
 locals {

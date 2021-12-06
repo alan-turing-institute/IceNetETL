@@ -29,7 +29,7 @@ module "database" {
 # NetCDF processing
 module "processing" {
   source                       = "./processing"
-  storage_account              = module.data.storage_account
+  data_storage_account         = module.data.storage_account
   database_resource_group_name = module.data.rg_name
   database_fqdn                = module.database.server_fqdn
   database_host                = module.database.server_name
