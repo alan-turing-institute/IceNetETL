@@ -40,12 +40,8 @@ resource "azurerm_app_service_plan" "this" {
   kind                = "Linux"
   reserved            = true
   sku {
-    # Basic B1: 100 total ACU, 1.75 GB memory £9.49/month
-    # Premium P1V2: 210 total ACU, 3.5 GB memory £60.59/month
-    # Premium P1V3: 195 total ACU, 8 GB memory £92.49/month
-    # Premium P2V3: 195 total ACU, 16 GB memory £184.98/month
-    tier = "Basic"
-    size = "B1"
+    tier = local.app_sku_category
+    size = local.app_sku
   }
   lifecycle {
     ignore_changes = [kind]
@@ -64,6 +60,7 @@ resource "azurerm_function_app" "this" {
   os_type                    = "linux"
   version                    = "~3"
   site_config {
+    always_on                 = true
     linux_fx_version          = "Python|3.9"
     use_32_bit_worker_process = false
   }

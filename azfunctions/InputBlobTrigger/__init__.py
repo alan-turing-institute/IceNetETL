@@ -1,6 +1,5 @@
 # Standard library
 import logging
-import sys
 
 # Third party
 import azure.functions as func
@@ -20,5 +19,4 @@ def main(inputBlob: func.InputStream):
         processor.update_latest_forecast()
     except InputBlobTriggerException as exc:
         logging.error(f"Failed with message:\n{exc}")
-        sys.exit(1)
     logging.info(f"Finished processing Azure blob: {inputBlob.name}")
