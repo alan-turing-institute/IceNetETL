@@ -4,7 +4,7 @@ import coloredlogs
 import hcl
 import logging
 import os
-from azure.identity import DefaultAzureCredential
+from azure.identity import InteractiveBrowserCredential
 from azure.mgmt.resource import ResourceManagementClient, SubscriptionClient
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
 from azure.mgmt.storage import StorageManagementClient
@@ -69,10 +69,14 @@ def main():
         "storage_account_name"
     ]
     storage_container_name = config["terraform"]["backend"]["azurerm"]["container_name"]
-    subscription_id, tenant_id = get_azure_ids(args.azure_subscription_name)
+
+    # Get a common Azure information
+    credential = InteractiveBrowserCredential()
+    subscription_id, tenant_id = get_azure_ids(credential, args.azure_subscription_name)
 
     # Configure the Terraform backend
     configure_terraform_backend(
+        credential,
         subscription_id,
         resource_group_name,
         storage_account_name,
@@ -80,7 +84,7 @@ def main():
         tags=tags,
     )
     storage_key = load_terraform_storage_key(
-        subscription_id, resource_group_name, storage_account_name
+        credential, subscription_id, resource_group_name, storage_account_name
     )
 
     # Write Terraform configs to file
@@ -93,10 +97,9 @@ def main():
     )
 
 
-def get_azure_ids(subscription_name):
+def get_azure_ids(credential, subscription_name):
     """Get subscription and tenant IDs"""
     # Connect to Azure clients
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
     subscription_client = SubscriptionClient(credential=credential)
 
     # Check that the Azure credentials are valid
@@ -109,7 +112,7 @@ def get_azure_ids(subscription_name):
                 subscription_id = subscription.subscription_id
                 tenant_id = subscription.tenant_id
         logging.info(
-            f"Successfully authenticated using: {credential._successful_credential.__class__.__name__}"
+            f"Successfully authenticated using: {credential.__class__.__name__}"
         )
     except ClientAuthenticationError:
         logging.error(
@@ -151,6 +154,7 @@ def write_terraform_configs(
 
 
 def configure_terraform_backend(
+    credential,
     subscription_id,
     resource_group_name,
     storage_account_name,
@@ -160,7 +164,6 @@ def configure_terraform_backend(
 ):
     """Ensure that Terraform backend resources are configured"""
     # Connect to Azure clients
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
     resource_client = ResourceManagementClient(credential, subscription_id)
     storage_client = StorageManagementClient(credential, subscription_id)
 
@@ -214,13 +217,13 @@ def configure_terraform_backend(
 
 
 def load_terraform_storage_key(
+    credential,
     subscription_id,
     resource_group_name,
     storage_account_name,
 ):
     """Load Terraform storage key"""
     # Connect to Azure clients
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
     storage_client = StorageManagementClient(credential, subscription_id)
 
     # Return the first storage account key
