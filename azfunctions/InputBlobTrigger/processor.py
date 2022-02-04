@@ -104,14 +104,18 @@ class Processor:
             logging.info(
                 f"{self.log_prefix} Identified data variables: {list(self.xr.keys())}."
             )
-            # Identify hemisphere
-            keywords = self.xr.attrs.get("keywords", "").lower()
-            lat_max = self.xr.attrs.get("geospatial_lat_max", 0)
-            lat_min = self.xr.attrs.get("geospatial_lat_min", 0)
-            if ("north" in keywords) or (lat_max > 80.0):
+            # Try to identify hemisphere from geospatial extent
+            if self.xr.attrs.get("geospatial_lat_max", 0) > 80:
                 self.hemisphere = "north"
-            elif ("south" in keywords) or (lat_min < -80):
+            elif self.xr.attrs.get("geospatial_lat_min", 0) < -80:
                 self.hemisphere = "south"
+            # Otherwise try to do so from keywords
+            if not self.hemisphere:
+                keywords = self.xr.attrs.get("keywords", "").lower()
+                if "north" in keywords and "south" not in keywords:
+                    self.hemisphere = "north"
+                if "south" in keywords and "north" not in keywords:
+                    self.hemisphere = "south"
             if not self.hemisphere:
                 raise ValueError("Could not identify hemisphere!")
             logging.info(
