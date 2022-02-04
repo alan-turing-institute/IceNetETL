@@ -238,36 +238,38 @@ class Processor:
             f"{self.log_prefix} Loaded {df_forecasts.shape[0]} forecasts from input data."
         )
 
-        # Get cell IDs by loading existing cells and merging onto list of forecasts
+        # Load all existing cells for this hemisphere
         logging.info(f"{self.log_prefix} Identifying cell IDs for all forecasts...")
         df_cells = pd.io.sql.read_sql_query(
             f"SELECT cell_id, centroid_x, centroid_y FROM {self.tables['geom'][self.hemisphere]};",
             self.cnxn,
         )
-        df_merged = pd.merge(
-            df_forecasts,
-            df_cells,
-            how="left",
-            left_on=["xc_m", "yc_m"],
-            right_on=["centroid_x", "centroid_y"],
-        )
         logging.info(
-            f"{self.log_prefix} Identified cell IDs for {df_merged.shape[0]} forecasts."
+            f"{self.log_prefix} Loaded {df_cells.shape[0]} cells from the database."
         )
 
         # Insert forecasts into the database
         logging.info(
             f"{self.log_prefix} Ensuring that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_forecasts.shape[0]} forecasts..."
         )
-        n_batches = int(math.ceil(df_merged.shape[0] / self.batch_size))
+        n_batches = int(math.ceil(df_forecasts.shape[0] / self.batch_size))
         start_time = time.monotonic()
         for idx, record_batch in enumerate(
-            batches(df_merged, self.batch_size), start=1
+            batches(df_forecasts, self.batch_size, as_dataframe=True), start=1
         ):
-            logging.info(
-                f"{self.log_prefix} Preparing to insert/update {len(record_batch)} forecasts. Batch {idx}/{n_batches}."
+            # Add cell IDs by merging forecasts onto pre-loaded cells
+            df_merged = pd.merge(
+                pd.DataFrame(record_batch),
+                df_cells,
+                how="left",
+                left_on=["xc_m", "yc_m"],
+                right_on=["centroid_x", "centroid_y"],
             )
-            for record in record_batch:
+            # Insert merged forecasts into database
+            logging.info(
+                f"{self.log_prefix} Preparing to insert/update {df_merged.shape[0]} forecasts. Batch {idx}/{n_batches}."
+            )
+            for record in df_merged.itertuples(False):
                 self.cursor.execute(
                     f"""
                     INSERT INTO {self.tables['forecasts'][self.hemisphere]} (forecast_id, date_forecast_generated, date_forecast_for, cell_id, sea_ice_concentration_mean, sea_ice_concentration_stddev)

@@ -11,7 +11,7 @@ from .utils import InputBlobTriggerException
 
 def main(inputBlob: func.InputStream):
     logging.info(f"Processing Azure blob: {inputBlob.name} ({inputBlob.length} bytes)")
-    processor = Processor(50000)
+    processor = Processor(100000)
     try:
         processor.load(inputBlob)
         processor.update_geometries()
