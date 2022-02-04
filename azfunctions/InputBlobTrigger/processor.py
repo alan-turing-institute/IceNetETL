@@ -37,6 +37,10 @@ class Processor:
                 "south": "south_forecast_latest",
             },
         }
+        self.projections = {
+            "north": "6931",
+            "south": "6932",
+        }
         self.xr = None
         self.hemisphere = None
         self.log_prefix = None
@@ -131,7 +135,7 @@ class Processor:
                 cell_id SERIAL PRIMARY KEY,
                 centroid_x int4,
                 centroid_y int4,
-                geom_6931 geometry,
+                geom_{self.projections[self.hemisphere]} geometry,
                 geom_4326 geometry,
                 UNIQUE (centroid_x, centroid_y)
             );
@@ -183,8 +187,8 @@ class Processor:
             for record in record_batch:
                 self.cursor.execute(
                     f"""
-                    INSERT INTO {self.tables['geom'][self.hemisphere]} (cell_id, centroid_x, centroid_y, geom_6931, geom_4326)
-                    VALUES(DEFAULT, %s, %s, ST_GeomFromText(%s, 6931), ST_Transform(ST_GeomFromText(%s, 6931), 4326))
+                    INSERT INTO {self.tables['geom'][self.hemisphere]} (cell_id, centroid_x, centroid_y, geom_{self.projections[self.hemisphere]}, geom_4326)
+                    VALUES(DEFAULT, %s, %s, ST_GeomFromText(%s, {self.projections[self.hemisphere]}), ST_Transform(ST_GeomFromText(%s, {self.projections[self.hemisphere]}), 4326))
                     ON CONFLICT DO NOTHING;
                     """,
                     record,
@@ -194,6 +198,8 @@ class Processor:
             logging.info(
                 f"{self.log_prefix} Inserted/updated {len(record_batch)} geometries. Time remaining {human_readable(remaining_time)}. Batch {idx}/{n_batches}."
             )
+            # Explicitly delete collections once used
+            del record_batch
         logging.info(
             f"{self.log_prefix} Ensured that '{self.tables['geom'][self.hemisphere]}' contains all geometries."
         )
@@ -296,8 +302,11 @@ class Processor:
             logging.info(
                 f"{self.log_prefix} Inserted/updated {len(record_batch)} forecasts. Time remaining {human_readable(remaining_time)}. Batch {idx}/{n_batches}."
             )
+            # Explicitly delete collections once used
+            del record_batch
+            del df_merged
         logging.info(
-            f"{self.log_prefix} Ensured that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_merged.shape[0]} forecasts."
+            f"{self.log_prefix} Ensured that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_forecasts.shape[0]} forecasts."
         )
 
     def update_latest_forecast(self) -> None:
@@ -319,12 +328,12 @@ class Processor:
                     {self.tables['geom'][self.hemisphere]}.cell_id,
                     {self.tables['geom'][self.hemisphere]}.centroid_x,
                     {self.tables['geom'][self.hemisphere]}.centroid_y,
-                    {self.tables['geom'][self.hemisphere]}.geom_6931,
+                    {self.tables['geom'][self.hemisphere]}.geom_{self.projections[self.hemisphere]},
                     {self.tables['geom'][self.hemisphere]}.geom_4326
                 FROM {self.tables['forecasts'][self.hemisphere]}
                 FULL OUTER JOIN cell ON {self.tables['forecasts'][self.hemisphere]}.cell_id = {self.tables['geom'][self.hemisphere]}.cell_id
                 WHERE date_forecast_generated = (SELECT max(date_forecast_generated) FROM {self.tables['forecasts'][self.hemisphere]})
-                GROUP BY {self.tables['geom'][self.hemisphere]}.cell_id, date_forecast_generated, date_forecast_for, centroid_x, centroid_y, sea_ice_concentration_mean, sea_ice_concentration_stddev, geom_6931, geom_4326;
+                GROUP BY {self.tables['geom'][self.hemisphere]}.cell_id, date_forecast_generated, date_forecast_for, centroid_x, centroid_y, sea_ice_concentration_mean, sea_ice_concentration_stddev, geom_{self.projections[self.hemisphere]}, geom_4326;
             """
         )
         self.cnxn.commit()
