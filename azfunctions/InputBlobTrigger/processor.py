@@ -39,6 +39,7 @@ class Processor:
         }
         self.xr = None
         self.hemisphere = None
+        self.log_prefix = None
 
     def __del__(self):
         """Destructor."""
@@ -61,9 +62,13 @@ class Processor:
                     password=db_pwd,
                     host=db_host,
                 )
-                logging.info(f"Connected to database {db_name} on {db_host}.")
+                logging.info(
+                    f"{self.log_prefix} Connected to database {db_name} on {db_host}."
+                )
             except psycopg2.OperationalError as exc:
-                logging.error(f"Failed to connect to database {db_name} on {db_host}!")
+                logging.error(
+                    f"{self.log_prefix} Failed to connect to database {db_name} on {db_host}!"
+                )
                 raise InputBlobTriggerException(exc)
         return self.cnxn_
 
@@ -76,11 +81,12 @@ class Processor:
 
     def load(self, inputBlob: func.InputStream) -> None:
         """Load data from a file into an xarray."""
-        logging.info(f"Attempting to load {inputBlob.name}...")
+        self.log_prefix = f"[{os.path.splitext(os.path.basename(inputBlob.name))[0]}]"
+        logging.info(f"{self.log_prefix} Attempting to load {inputBlob.name}...")
         try:
             self.xr = xarray.open_dataset(io.BytesIO(inputBlob.read()))
             logging.info(
-                f"Loaded NetCDF data into array with dimensions: {self.xr.dims}."
+                f"{self.log_prefix} Loaded NetCDF data into array with dimensions: {self.xr.dims}."
             )
             # Compatibility with old file format
             compatibility = {}
@@ -91,7 +97,9 @@ class Processor:
                 compatibility["stddev"] = "sic_stddev"
             if compatibility:
                 self.xr = self.xr.rename(compatibility)
-            logging.info(f"Identified data variables: {list(self.xr.keys())}.")
+            logging.info(
+                f"{self.log_prefix} Identified data variables: {list(self.xr.keys())}."
+            )
             # Identify hemisphere
             keywords = self.xr.attrs.get("keywords", "").lower()
             lat_max = self.xr.attrs.get("geospatial_lat_max", 0)
@@ -103,17 +111,19 @@ class Processor:
             if not self.hemisphere:
                 raise ValueError("Could not identify hemisphere!")
             logging.info(
-                f"Identified data as belonging to the {self.hemisphere}ern hemisphere."
+                f"{self.log_prefix} Identified data as belonging to the {self.hemisphere}ern hemisphere."
             )
         except ValueError as exc:
-            logging.error(f"Could not load NetCDF data from {inputBlob.name}!")
+            logging.error(
+                f"{self.log_prefix} Could not load NetCDF data from {inputBlob.name}!"
+            )
             raise InputBlobTriggerException(exc)
 
     def update_geometries(self) -> None:
         """Update the table of geometries, creating it if necessary."""
         # Ensure that geometry table exists
         logging.info(
-            f"Ensuring that geometries table '{self.tables['geom'][self.hemisphere]}' exists..."
+            f"{self.log_prefix} Ensuring that geometries table '{self.tables['geom'][self.hemisphere]}' exists..."
         )
         self.cursor.execute(
             f"""
@@ -129,11 +139,13 @@ class Processor:
         )
         self.cnxn.commit()
         logging.info(
-            f"Ensured that geometries table '{self.tables['geom'][self.hemisphere]}' exists."
+            f"{self.log_prefix} Ensured that geometries table '{self.tables['geom'][self.hemisphere]}' exists."
         )
 
         # Calculate the size of the grid cells
-        logging.info("Identifying cell geometries from input data...")
+        logging.info(
+            f"{self.log_prefix} Identifying cell geometries from input data..."
+        )
         centroids_x_km, centroids_y_km = self.xr.xc.values, self.xr.yc.values
         x_delta_m = 1000 * int(0.5 * mean_step_size(centroids_x_km))
         y_delta_m = 1000 * int(0.5 * mean_step_size(centroids_y_km))
@@ -156,17 +168,17 @@ class Processor:
                     ]
                 )
                 records.append((centroid_x_m, centroid_y_m, geometry.wkt, geometry.wkt))
-        logging.info(f"Identified {len(records)} cell geometries.")
+        logging.info(f"{self.log_prefix} Identified {len(records)} cell geometries.")
 
         # Insert geometries into the database
         logging.info(
-            f"Ensuring that '{self.tables['geom'][self.hemisphere]}' contains all {len(records)} geometries..."
+            f"{self.log_prefix} Ensuring that '{self.tables['geom'][self.hemisphere]}' contains all {len(records)} geometries..."
         )
         n_batches = int(math.ceil(len(records) / self.batch_size))
         start_time = time.monotonic()
         for idx, record_batch in enumerate(batches(records, self.batch_size), start=1):
             logging.info(
-                f"Batch {idx}/{n_batches}. Preparing to insert/update {len(record_batch)} geometries..."
+                f"{self.log_prefix} Preparing to insert/update {len(record_batch)} geometries. Batch {idx}/{n_batches}."
             )
             for record in record_batch:
                 self.cursor.execute(
@@ -180,17 +192,17 @@ class Processor:
             self.cnxn.commit()
             remaining_time = (time.monotonic() - start_time) * (n_batches / idx - 1)
             logging.info(
-                f"Batch {idx}/{n_batches}. Inserted/updated {len(record_batch)} geometries. Time remaining {human_readable(remaining_time)}."
+                f"{self.log_prefix} Inserted/updated {len(record_batch)} geometries. Time remaining {human_readable(remaining_time)}. Batch {idx}/{n_batches}."
             )
         logging.info(
-            f"Ensured that '{self.tables['geom'][self.hemisphere]}' contains all geometries."
+            f"{self.log_prefix} Ensured that '{self.tables['geom'][self.hemisphere]}' contains all geometries."
         )
 
     def update_forecasts(self) -> None:
         """Update the table of forecasts, creating it if necessary"""
         # Ensure that forecast table exists
         logging.info(
-            f"Ensuring that forecasts table '{self.tables['forecasts'][self.hemisphere]}' exists..."
+            f"{self.log_prefix} Ensuring that forecasts table '{self.tables['forecasts'][self.hemisphere]}' exists..."
         )
         self.cursor.execute(
             f"""
@@ -208,11 +220,11 @@ class Processor:
         )
         self.cnxn.commit()
         logging.info(
-            f"Ensured that forecasts table '{self.tables['forecasts'][self.hemisphere]}' exists."
+            f"{self.log_prefix} Ensured that forecasts table '{self.tables['forecasts'][self.hemisphere]}' exists."
         )
 
         # Construct a list of values
-        logging.info("Loading forecasts from input data...")
+        logging.info(f"{self.log_prefix} Loading forecasts from input data...")
         df_forecasts = (
             self.xr.where(self.xr["sic_mean"] > 0).to_dataframe().dropna().reset_index()
         )
@@ -222,10 +234,12 @@ class Processor:
         df_forecasts["yc_m"] = pd.to_numeric(
             1000 * df_forecasts["yc"], downcast="integer"
         )
-        logging.info(f"Loaded {df_forecasts.shape[0]} forecasts from input data.")
+        logging.info(
+            f"{self.log_prefix} Loaded {df_forecasts.shape[0]} forecasts from input data."
+        )
 
         # Get cell IDs by loading existing cells and merging onto list of forecasts
-        logging.info("Identifying cell IDs for all forecasts...")
+        logging.info(f"{self.log_prefix} Identifying cell IDs for all forecasts...")
         df_cells = pd.io.sql.read_sql_query(
             f"SELECT cell_id, centroid_x, centroid_y FROM {self.tables['geom'][self.hemisphere]};",
             self.cnxn,
@@ -237,11 +251,13 @@ class Processor:
             left_on=["xc_m", "yc_m"],
             right_on=["centroid_x", "centroid_y"],
         )
-        logging.info(f"Identified cell IDs for {df_merged.shape[0]} forecasts.")
+        logging.info(
+            f"{self.log_prefix} Identified cell IDs for {df_merged.shape[0]} forecasts."
+        )
 
         # Insert forecasts into the database
         logging.info(
-            f"Ensuring that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_merged.shape[0]} forecasts..."
+            f"{self.log_prefix} Ensuring that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_forecasts.shape[0]} forecasts..."
         )
         n_batches = int(math.ceil(df_merged.shape[0] / self.batch_size))
         start_time = time.monotonic()
@@ -249,7 +265,7 @@ class Processor:
             batches(df_merged, self.batch_size), start=1
         ):
             logging.info(
-                f"Batch {idx}/{n_batches}. Preparing to insert/update {len(record_batch)} forecasts..."
+                f"{self.log_prefix} Preparing to insert/update {len(record_batch)} forecasts. Batch {idx}/{n_batches}."
             )
             for record in record_batch:
                 self.cursor.execute(
@@ -276,17 +292,17 @@ class Processor:
             self.cnxn.commit()
             remaining_time = (time.monotonic() - start_time) * (n_batches / idx - 1)
             logging.info(
-                f"Batch {idx}/{n_batches}. Inserted/updated {len(record_batch)} forecasts. Time remaining {human_readable(remaining_time)}."
+                f"{self.log_prefix} Inserted/updated {len(record_batch)} forecasts. Time remaining {human_readable(remaining_time)}. Batch {idx}/{n_batches}."
             )
         logging.info(
-            f"Ensured that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_merged.shape[0]} forecasts."
+            f"{self.log_prefix} Ensured that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_merged.shape[0]} forecasts."
         )
 
     def update_latest_forecast(self) -> None:
         """Update the 'latest forecast' view, creating it if necessary"""
         # Ensure that view table exists
         logging.info(
-            f"Updating materialised view '{self.tables['latest'][self.hemisphere]}'..."
+            f"{self.log_prefix} Updating materialised view '{self.tables['latest'][self.hemisphere]}'..."
         )
         self.cursor.execute(
             f"""
@@ -311,5 +327,5 @@ class Processor:
         )
         self.cnxn.commit()
         logging.info(
-            f"Updated materialised view '{self.tables['latest'][self.hemisphere]}'."
+            f"{self.log_prefix} Updated materialised view '{self.tables['latest'][self.hemisphere]}'."
         )
