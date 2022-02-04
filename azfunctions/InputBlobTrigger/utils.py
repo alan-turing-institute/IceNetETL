@@ -37,5 +37,5 @@ def human_readable(seconds):
     return f"{seconds:d}s"
 
 
-def mean_step_size(input):
-    return (max(input) - min(input)) / (len(input) - 1)
+def mean_step_size(input_):
+    return (max(input_) - min(input_)) / (len(input_) - 1)
