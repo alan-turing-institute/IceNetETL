@@ -6,21 +6,28 @@ class InputBlobTriggerException(Exception):
     pass
 
 
-def batches(input, size):
-    """Yield successive chunks of up to 'size' elements from input."""
-    if isinstance(input, pd.DataFrame):
+def batches(iterable_input, size, as_dataframe=False):
+    """Yield successive chunks of up to 'size' elements from iterable_input."""
+
+    def maybe_df(output_, as_dataframe):
+        """Convert output to a DataFrame or leave it as-is depending on argument"""
+        if as_dataframe:
+            return pd.DataFrame(output_)
+        return output_
+
+    if isinstance(iterable_input, pd.DataFrame):
         output = []
-        for tuple_ in input.itertuples(False):
+        for tuple_ in iterable_input.itertuples(False):
             output.append(tuple_)
             if len(output) >= size:
-                yield output
+                yield maybe_df(output, as_dataframe)
                 output = []
         if output:
-            yield output
+            yield maybe_df(output, as_dataframe)
             output = []
     else:
-        for idx in range(0, len(input), size):
-            yield input[idx : idx + size]
+        for idx in range(0, len(iterable_input), size):
+            yield maybe_df(iterable_input[idx : idx + size], as_dataframe)
 
 
 def human_readable(seconds):
