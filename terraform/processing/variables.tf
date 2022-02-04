@@ -46,6 +46,6 @@ locals {
   # PremiumV2  P1v2  1 core  3.5  GB RAM  £136.28 / month
   # PremiumV2  P2v2  2 core  7    GB RAM  £272.55 / month
   # PremiumV3  P1v3  2 core  8    GB RAM  £181.52 / month
-  app_sku_category = "PremiumV2"
-  app_sku          = "P1v2"
+  app_sku_category = "PremiumV3"
+  app_sku          = "P1v3"
 }
