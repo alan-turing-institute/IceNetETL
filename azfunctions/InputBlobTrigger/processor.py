@@ -186,7 +186,7 @@ class Processor:
         start_time = time.monotonic()
         for idx, record_batch in enumerate(batches(records, self.batch_size), start=1):
             logging.info(
-                f"{self.log_prefix} Preparing to insert/update {len(record_batch)} geometries. Batch {idx}/{n_batches}."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: preparing to insert/update {len(record_batch)} geometries..."
             )
             for record in record_batch:
                 self.cursor.execute(
@@ -198,9 +198,10 @@ class Processor:
                     record,
                 )
             self.cnxn.commit()
-            remaining_time = (time.monotonic() - start_time) * (n_batches / idx - 1)
+            time_taken = time.monotonic() - start_time
+            remaining_time = time_taken * (n_batches / idx - 1)
             logging.info(
-                f"{self.log_prefix} Inserted/updated {len(record_batch)} geometries. Time remaining {human_readable(remaining_time)}. Batch {idx}/{n_batches}."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: inserted/updated {len(record_batch)} geometries in {human_readable(time_taken)}. Estimated time remaining {human_readable(remaining_time)}."
             )
             # Explicitly delete collections once used
             del record_batch
@@ -277,7 +278,7 @@ class Processor:
             )
             # Insert merged forecasts into database
             logging.info(
-                f"{self.log_prefix} Preparing to insert/update {df_merged.shape[0]} forecasts. Batch {idx}/{n_batches}."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: preparing to insert/update {df_merged.shape[0]} forecasts..."
             )
             for record in df_merged.itertuples(False):
                 self.cursor.execute(
@@ -302,9 +303,10 @@ class Processor:
                     ],
                 )
             self.cnxn.commit()
-            remaining_time = (time.monotonic() - start_time) * (n_batches / idx - 1)
+            time_taken = time.monotonic() - start_time
+            remaining_time = time_taken * (n_batches / idx - 1)
             logging.info(
-                f"{self.log_prefix} Inserted/updated {len(record_batch)} forecasts. Time remaining {human_readable(remaining_time)}. Batch {idx}/{n_batches}."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: inserted/updated {len(record_batch)} forecasts in {human_readable(time_taken)}. Estimated time remaining {human_readable(remaining_time)}."
             )
             # Explicitly delete collections once used
             del record_batch
