@@ -18,8 +18,9 @@ from .utils import batches, human_readable, mean_step_size, InputBlobTriggerExce
 
 
 class Processor:
-    def __init__(self, batch_size):
+    def __init__(self, log_prefix, batch_size):
         """Constructor."""
+        self.log_prefix = log_prefix
         self.batch_size = batch_size
         self.cnxn_ = None
         self.cursor_ = None
@@ -43,7 +44,6 @@ class Processor:
         }
         self.xr = None
         self.hemisphere = None
-        self.log_prefix = None
 
     def __del__(self):
         """Destructor."""
@@ -85,7 +85,6 @@ class Processor:
 
     def load(self, inputBlob: func.InputStream) -> None:
         """Load data from a file into an xarray."""
-        self.log_prefix = f"[{os.path.splitext(os.path.basename(inputBlob.name))[0]}]"
         logging.info(f"{self.log_prefix} Attempting to load {inputBlob.name}...")
         try:
             self.xr = xarray.open_dataset(io.BytesIO(inputBlob.read()))
