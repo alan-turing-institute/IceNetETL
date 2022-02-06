@@ -44,5 +44,14 @@ def human_readable(seconds):
     return f"{seconds:d}s"
 
 
+def get_time_estimates(time_start, time_start_batch, time_now, f_complete):
+    """After a batch, get the batch time; remaining time and total time"""
+    time_elapsed_batch = time_now - time_start_batch
+    time_elapsed_total = time_now - time_start
+    time_total = time_elapsed_total / f_complete
+    time_remaining = time_total - time_elapsed_total
+    return (time_elapsed_batch, time_elapsed_total, time_remaining, time_total)
+
+
 def mean_step_size(input_):
     return (max(input_) - min(input_)) / (len(input_) - 1)

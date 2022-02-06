@@ -14,7 +14,13 @@ from shapely.geometry import Polygon
 import xarray
 
 # Local
-from .utils import batches, human_readable, mean_step_size, InputBlobTriggerException
+from .utils import (
+    batches,
+    get_time_estimates,
+    human_readable,
+    mean_step_size,
+    InputBlobTriggerException,
+)
 
 
 class Processor:
@@ -182,10 +188,12 @@ class Processor:
             f"{self.log_prefix} Ensuring that '{self.tables['geom'][self.hemisphere]}' contains all {len(records)} geometries..."
         )
         n_batches = int(math.ceil(len(records) / self.batch_size))
-        start_time = time.monotonic()
+        est_remaining = 8 * 60  # 8 minutes
+        time_start = time.monotonic()
         for idx, record_batch in enumerate(batches(records, self.batch_size), start=1):
+            time_start_batch = time.monotonic()
             logging.info(
-                f"{self.log_prefix} Batch {idx}/{n_batches} :: preparing to insert/update {len(record_batch)} geometries..."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: preparing to insert/update {len(record_batch)} geometries. Time remaining: {human_readable(est_remaining)}."
             )
             for record in record_batch:
                 self.cursor.execute(
@@ -197,10 +205,11 @@ class Processor:
                     record,
                 )
             self.cnxn.commit()
-            time_taken = time.monotonic() - start_time
-            remaining_time = time_taken * (n_batches / idx - 1)
+            elapsed_batch, elapsed_total, est_remaining, est_total = get_time_estimates(
+                time_start, time_start_batch, time.monotonic(), idx / float(n_batches)
+            )
             logging.info(
-                f"{self.log_prefix} Batch {idx}/{n_batches} :: inserted/updated {len(record_batch)} geometries in {human_readable(time_taken)}. Estimated time remaining {human_readable(remaining_time)}."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: inserted/updated {len(record_batch)} geometries in {human_readable(elapsed_batch)}. Time taken: {human_readable(elapsed_total)} of {human_readable(est_total)}.",
             )
             # Explicitly delete collections once used
             del record_batch
@@ -263,13 +272,15 @@ class Processor:
             f"{self.log_prefix} Ensuring that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_forecasts.shape[0]} forecasts..."
         )
         n_batches = int(math.ceil(df_forecasts.shape[0] / self.batch_size))
-        start_time = time.monotonic()
-        for idx, record_batch in enumerate(
+        est_remaining = 12 * 60 * 60  # 12 hours
+        time_start = time.monotonic()
+        for idx, df_batch in enumerate(
             batches(df_forecasts, self.batch_size, as_dataframe=True), start=1
         ):
+            time_start_batch = time.monotonic()
             # Add cell IDs by merging forecasts onto pre-loaded cells
             df_merged = pd.merge(
-                pd.DataFrame(record_batch),
+                df_batch,
                 df_cells,
                 how="left",
                 left_on=["xc_m", "yc_m"],
@@ -277,7 +288,7 @@ class Processor:
             )
             # Insert merged forecasts into database
             logging.info(
-                f"{self.log_prefix} Batch {idx}/{n_batches} :: preparing to insert/update {df_merged.shape[0]} forecasts..."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: preparing to insert/update {df_merged.shape[0]} forecasts. Time remaining: {human_readable(est_remaining)}."
             )
             for record in df_merged.itertuples(False):
                 self.cursor.execute(
@@ -302,13 +313,14 @@ class Processor:
                     ],
                 )
             self.cnxn.commit()
-            time_taken = time.monotonic() - start_time
-            remaining_time = time_taken * (n_batches / idx - 1)
+            elapsed_batch, elapsed_total, est_remaining, est_total = get_time_estimates(
+                time_start, time_start_batch, time.monotonic(), idx / float(n_batches)
+            )
             logging.info(
-                f"{self.log_prefix} Batch {idx}/{n_batches} :: inserted/updated {len(record_batch)} forecasts in {human_readable(time_taken)}. Estimated time remaining {human_readable(remaining_time)}."
+                f"{self.log_prefix} Batch {idx}/{n_batches} :: inserted/updated {df_merged.shape[0]} forecasts in {human_readable(elapsed_batch)}. Time taken: {human_readable(elapsed_total)} of {human_readable(est_total)}.",
             )
             # Explicitly delete collections once used
-            del record_batch
+            del df_batch
             del df_merged
         logging.info(
             f"{self.log_prefix} Ensured that table '{self.tables['forecasts'][self.hemisphere]}' contains all {df_forecasts.shape[0]} forecasts."
