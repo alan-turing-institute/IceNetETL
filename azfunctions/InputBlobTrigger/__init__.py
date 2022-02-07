@@ -15,7 +15,7 @@ def main(inputBlob: func.InputStream):
     logging.info(
         f"{log_prefix} Processing Azure blob: {inputBlob.name} ({inputBlob.length} bytes)"
     )
-    processor = Processor(log_prefix, 100000)
+    processor = Processor(log_prefix, 150000)
     try:
         processor.load(inputBlob)
         processor.update_geometries()
